@@ -216,4 +216,33 @@
                 // Check for majority
                 const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
                 const maxVotes = Math.max(...Object.values(voteCounts));
-                const winner = Object.keys(voteCounts).find
+                const winner = Object.keys(voteCounts).find(candidate => voteCounts[candidate] === maxVotes);
+
+                if (maxVotes > totalVotes / 2) {
+                    resultText += `<p class="font-bold mt-2">${winner} wins with a majority!</p>`;
+                    break;
+                }
+
+                // Eliminate candidate with fewest votes
+                const minVotes = Math.min(...Object.values(voteCounts));
+                const toEliminate = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === minVotes);
+                resultText += `<p class="mt-2">Eliminating ${toEliminate.join(', ')} (fewest votes: ${minVotes})</p>`;
+                remainingCandidates = remainingCandidates.filter(candidate => !toEliminate.includes(candidate));
+
+                if (remainingCandidates.length === 0) {
+                    resultText += '<p class="font-bold mt-2">No winner (all candidates eliminated).</p>';
+                    break;
+                }
+
+                round++;
+            }
+
+            if (remainingCandidates.length === 1) {
+                resultText += `<p class="font-bold mt-2">${remainingCandidates[0]} wins!</p>`;
+            }
+
+            resultsDiv.innerHTML = resultText;
+        }
+    </script>
+</body>
+</html>
