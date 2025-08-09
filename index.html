@@ -34,7 +34,6 @@
             <div class="flex space-x-2 mt-4">
                 <button id="start-voting" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Start Voting</button>
                 <button id="define-candidates-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
-                <button id="reset-votes" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Reset Votes</button>
             </div>
         </div>
 
@@ -65,6 +64,33 @@
         let candidates = [];
         let votes = [];
         let currentRanking = [];
+
+        // Function to play a sound using Web Audio API
+        function playSound(type) {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            if (type === 'submit') {
+                // Chime sound for Submit Vote (higher pitch, longer duration)
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(800, ctx.currentTime); // Higher pitch
+                gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            } else if (type === 'reset') {
+                // Click sound for Reset (lower pitch, shorter duration)
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(400, ctx.currentTime); // Lower pitch
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+            }
+
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + (type === 'submit' ? 0.5 : 0.2));
+        }
 
         // Define candidates (reload inputs with current candidates)
         document.getElementById('define-candidates-btn').addEventListener('click', () => {
@@ -98,18 +124,6 @@
             currentRanking = [];
             populateCandidates();
             updateRankingDisplay();
-        });
-
-        // Reset votes but keep candidates
-        document.getElementById('reset-votes').addEventListener('click', () => {
-            votes = [];
-            currentRanking = [];
-            document.getElementById('show-results').classList.add('hidden');
-            document.getElementById('results').innerHTML = '<p>No votes submitted yet.</p>';
-            if (candidates.length > 0) {
-                populateCandidates();
-                updateRankingDisplay();
-            }
         });
 
         // Populate candidate list
@@ -161,6 +175,7 @@
 
         // Reset ranking
         document.getElementById('reset-ranking').addEventListener('click', () => {
+            playSound('reset');
             currentRanking = [];
             populateCandidates();
             updateRankingDisplay();
@@ -169,6 +184,7 @@
         // Submit vote
         document.getElementById('submit-vote').addEventListener('click', () => {
             if (currentRanking.length === candidates.length) {
+                playSound('submit');
                 votes.push([...currentRanking]);
                 currentRanking = [];
                 populateCandidates();
