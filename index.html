@@ -22,7 +22,7 @@
     <div class="container mx-auto p-6 max-w-3xl">
         <h1 class="text-3xl font-bold mb-6 text-center">Ranked Choice Voting</h1>
 
-        <div id="define-candidates" class="bg-white p-6 rounded-lg shadow-md mb-6 hidden">
+        <div id="define-candidates" class="bg-white p-6 rounded-lg shadow-md mb-6">
             <h2 class="text-xl font-semibold mb-4">Define Candidates</h2>
             <p class="text-gray-600 mb-4">Enter up to 4 candidates. Each must have a unique name.</p>
             <div class="space-y-2">
@@ -31,15 +31,15 @@
                 <input id="candidate3" type="text" placeholder="Candidate 3" class="w-full p-2 border rounded">
                 <input id="candidate4" type="text" placeholder="Candidate 4" class="w-full p-2 border rounded">
             </div>
-            <button id="start-voting" class="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Start Voting</button>
+            <div class="flex space-x-2 mt-4">
+                <button id="start-voting" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Start Voting</button>
+                <button id="define-candidates-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
+                <button id="reset-votes" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Reset Votes</button>
+            </div>
         </div>
 
         <div id="voting-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
             <h2 class="text-xl font-semibold mb-4">Rank Your Candidates</h2>
-            <div class="flex space-x-2 mb-4">
-                <button id="define-candidates-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
-                <button id="reset-votes" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Reset Votes</button>
-            </div>
             <p class="text-gray-600 mb-4">Click candidates in order of preference.</p>
             <div id="candidate-list" class="space-y-2">
                 <!-- Candidates will be populated here -->
@@ -66,9 +66,13 @@
         let votes = [];
         let currentRanking = [];
 
-        // Show define candidates section
+        // Define candidates (reload inputs with current candidates)
         document.getElementById('define-candidates-btn').addEventListener('click', () => {
-            document.getElementById('define-candidates').classList.remove('hidden');
+            // Clear input fields
+            document.getElementById('candidate1').value = candidates[0] || '';
+            document.getElementById('candidate2').value = candidates[1] || '';
+            document.getElementById('candidate3').value = candidates[2] || '';
+            document.getElementById('candidate4').value = candidates[3] || '';
         });
 
         // Start voting with defined candidates
@@ -88,7 +92,6 @@
                 alert('Please enter at least 2 candidates.');
                 return;
             }
-            document.getElementById('define-candidates').classList.add('hidden');
             document.getElementById('show-results').classList.add('hidden');
             document.getElementById('results').innerHTML = '<p>No votes submitted yet.</p>';
             votes = [];
@@ -213,33 +216,4 @@
                 // Check for majority
                 const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
                 const maxVotes = Math.max(...Object.values(voteCounts));
-                const winner = Object.keys(voteCounts).find(candidate => voteCounts[candidate] === maxVotes);
-
-                if (maxVotes > totalVotes / 2) {
-                    resultText += `<p class="font-bold mt-2">${winner} wins with a majority!</p>`;
-                    break;
-                }
-
-                // Eliminate candidate with fewest votes
-                const minVotes = Math.min(...Object.values(voteCounts));
-                const toEliminate = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === minVotes);
-                resultText += `<p class="mt-2">Eliminating ${toEliminate.join(', ')} (fewest votes: ${minVotes})</p>`;
-                remainingCandidates = remainingCandidates.filter(candidate => !toEliminate.includes(candidate));
-
-                if (remainingCandidates.length === 0) {
-                    resultText += '<p class="font-bold mt-2">No winner (all candidates eliminated).</p>';
-                    break;
-                }
-
-                round++;
-            }
-
-            if (remainingCandidates.length === 1) {
-                resultText += `<p class="font-bold mt-2">${remainingCandidates[0]} wins!</p>`;
-            }
-
-            resultsDiv.innerHTML = resultText;
-        }
-    </script>
-</body>
-</html>
+                const winner = Object.keys(voteCounts).find
