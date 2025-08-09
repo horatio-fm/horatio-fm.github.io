@@ -98,21 +98,54 @@
             document.getElementById('candidate4').value = candidates[3] || '';
         });
 
-        // Save state to JSON file
-        document.getElementById('save-state').addEventListener('click', () => {
+        // Save state to JSON file with file dialog
+        document.getElementById('save-state').addEventListener('click', async () => {
             const state = {
                 candidates: candidates,
                 votes: votes
             };
-            const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'voting_state.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const json = JSON.stringify(state, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'voting_state.json',
+                        types: [
+                            {
+                                description: 'JSON Files',
+                                accept: { 'application/json': ['.json'] }
+                            }
+                        ]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } catch (e) {
+                    if (e.name !== 'AbortError') {
+                        console.error('Error saving file:', e);
+                        // Fallback to automatic download if file picker fails
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'voting_state.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }
+                }
+            } else {
+                // Fallback for browsers without showSaveFilePicker
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'voting_state.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
         });
 
         // Load state from JSON file
