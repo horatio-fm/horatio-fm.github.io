@@ -34,7 +34,10 @@
             <div class="flex space-x-2 mt-4">
                 <button id="start-voting" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Start Voting</button>
                 <button id="define-candidates-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
+                <button id="save-state" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Save</button>
+                <button id="load-state" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">Load</button>
             </div>
+            <input id="load-file-input" type="file" accept=".json" class="hidden">
         </div>
 
         <div id="voting-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -93,6 +96,65 @@
             document.getElementById('candidate2').value = candidates[1] || '';
             document.getElementById('candidate3').value = candidates[2] || '';
             document.getElementById('candidate4').value = candidates[3] || '';
+        });
+
+        // Save state to JSON file
+        document.getElementById('save-state').addEventListener('click', () => {
+            const state = {
+                candidates: candidates,
+                votes: votes
+            };
+            const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'voting_state.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // Load state from JSON file
+        document.getElementById('load-state').addEventListener('click', () => {
+            document.getElementById('load-file-input').click();
+        });
+
+        document.getElementById('load-file-input').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/json') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const state = JSON.parse(e.target.result);
+                        if (Array.isArray(state.candidates) && state.candidates.length >= 2 && state.candidates.length <= 4 && new Set(state.candidates).size === state.candidates.length) {
+                            candidates = state.candidates;
+                            votes = Array.isArray(state.votes) ? state.votes : [];
+                            // Validate votes
+                            votes = votes.filter(vote => Array.isArray(vote) && vote.length === candidates.length && vote.every(c => candidates.includes(c)));
+                            // Update UI
+                            document.getElementById('candidate1').value = candidates[0] || '';
+                            document.getElementById('candidate2').value = candidates[1] || '';
+                            document.getElementById('candidate3').value = candidates[2] || '';
+                            document.getElementById('candidate4').value = candidates[3] || '';
+                            currentRanking = [];
+                            populateCandidates();
+                            updateRankingDisplay();
+                            document.getElementById('show-results').classList.toggle('hidden', votes.length === 0);
+                            document.getElementById('results').innerHTML = votes.length === 0 ? '<p>No votes submitted yet.</p>' : '<p>Press "Show Results" to view the election outcome.</p>';
+                        } else {
+                            alert('Invalid JSON file: Candidates must be an array of 2-4 unique names.');
+                        }
+                    } catch (e) {
+                        alert('Error parsing JSON file.');
+                    }
+                    event.target.value = ''; // Reset file input
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please select a valid JSON file.');
+                event.target.value = ''; // Reset file input
+            }
         });
 
         // Start voting with defined candidates
