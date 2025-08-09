@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ranked Choice Voting</title>
-    <link rel="stylesheet" href="tailwind.min.css">
+    <link rel="stylesheet" href="tailwind.min.css" id="tailwind-stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .candidate-item {
@@ -22,6 +22,31 @@
             margin: 20px auto;
             padding: 10px;
         }
+        /* Fallback styles for candidate input fields if Tailwind fails */
+        #define-candidates input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+        #define-candidates button {
+            padding: 8px 16px;
+            margin-right: 8px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+        }
+        #start-voting { background-color: #4CAF50; }
+        #start-voting:hover { background-color: #45a049; }
+        #define-candidates-btn { background-color: #2196F3; }
+        #define-candidates-btn:hover { background-color: #1e88e5; }
+        #save-state { background-color: #FFC107; }
+        #save-state:hover { background-color: #e0a800; }
+        #load-state { background-color: #F28C38; }
+        #load-state:hover { background-color: #e07b30; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -70,6 +95,16 @@
     </div>
 
     <script>
+        // Check if Tailwind CSS loaded successfully
+        window.addEventListener('load', () => {
+            const tailwindStylesheet = document.getElementById('tailwind-stylesheet');
+            const stylesLoaded = window.getComputedStyle(document.body).getPropertyValue('--tw-bg-opacity');
+            if (!stylesLoaded) {
+                console.warn('Tailwind CSS failed to load. Using fallback styles.');
+                alert('Tailwind CSS failed to load. The site is still functional, but styling may be incomplete. Ensure tailwind.min.css is in the same directory as index.html.');
+            }
+        });
+
         let candidates = [];
         let votes = [];
         let currentRanking = [];
