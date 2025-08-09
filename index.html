@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ranked Choice Voting</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .candidate-item {
             cursor: pointer;
@@ -15,6 +16,10 @@
         }
         #voting-section {
             margin-bottom: 200vh; /* Two pages worth of white space */
+        }
+        .chart-container {
+            max-width: 600px;
+            margin: 20px auto;
         }
     </style>
 </head>
@@ -285,7 +290,7 @@
         // Show results
         document.getElementById('show-results').addEventListener('click', calculateResults);
 
-        // Calculate results using Instant Runoff Voting
+        // Calculate results using modified Instant Runoff Voting
         function calculateResults() {
             const resultsDiv = document.getElementById('results');
             if (votes.length === 0) {
@@ -309,13 +314,24 @@
                     }
                 });
 
+                // Initialize vote counts for all remaining candidates
+                remainingCandidates.forEach(candidate => {
+                    if (!voteCounts[candidate]) {
+                        voteCounts[candidate] = 0;
+                    }
+                });
+
                 // Display vote counts
                 resultText += '<ul class="list-disc pl-5">';
                 remainingCandidates.forEach(candidate => {
-                    const count = voteCounts[candidate] || 0;
+                    const count = voteCounts[candidate];
                     resultText += `<li>${candidate}: ${count} votes</li>`;
                 });
                 resultText += '</ul>';
+
+                // Create a canvas for the chart
+                const chartId = `vote-chart-round-${round}`;
+                resultText += `<div class="chart-container"><canvas id="${chartId}"></canvas></div>`;
 
                 // Check for majority
                 const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
@@ -327,16 +343,70 @@
                     break;
                 }
 
-                // Eliminate candidate with fewest votes
-                const minVotes = Math.min(...Object.values(voteCounts));
-                const toEliminate = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === minVotes);
-                resultText += `<p class="mt-2">Eliminating ${toEliminate.join(', ')} (fewest votes: ${minVotes})</p>`;
-                remainingCandidates = remainingCandidates.filter(candidate => !toEliminate.includes(candidate));
+                // Eliminate candidates with zero votes
+                const zeroVoteCandidates = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === 0);
+                if (zeroVoteCandidates.length > 0) {
+                    resultText += `<p class="mt-2">Eliminating ${zeroVoteCandidates.join(', ')} (zero votes)</p>`;
+                    remainingCandidates = remainingCandidates.filter(candidate => !zeroVoteCandidates.includes(candidate));
+                } else {
+                    // Eliminate one candidate with the fewest votes (>0)
+                    const nonZeroVotes = Object.entries(voteCounts).filter(([_, count]) => count > 0);
+                    if (nonZeroVotes.length > 0) {
+                        const minVotes = Math.min(...nonZeroVotes.map(([_, count]) => count));
+                        const toEliminateCandidates = nonZeroVotes.filter(([_, count]) => count === minVotes).map(([candidate]) => candidate);
+                        // Randomly select one candidate to eliminate from the tied candidates
+                        const toEliminate = toEliminateCandidates[Math.floor(Math.random() * toEliminateCandidates.length)];
+                        resultText += `<p class="mt-2">Eliminating ${toEliminate} (fewest votes: ${minVotes}, chosen randomly from ${toEliminateCandidates.join(', ')})</p>`;
+                        remainingCandidates = remainingCandidates.filter(candidate => candidate !== toEliminate);
+                    }
+                }
 
                 if (remainingCandidates.length === 0) {
                     resultText += '<p class="font-bold mt-2">No winner (all candidates eliminated).</p>';
                     break;
                 }
+
+                // Generate chart for the current round
+                const ctx = document.getElementById(chartId).getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: remainingCandidates,
+                        datasets: [{
+                            label: `Votes in Round ${round}`,
+                            data: remainingCandidates.map(candidate => voteCounts[candidate]),
+                            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'], // Distinct colors
+                            borderColor: ['#388E3C', '#1976D2', '#FFA000', '#D32F2F'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // Horizontal bars
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Votes'
+                                },
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Candidates'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
 
                 round++;
             }
