@@ -36,7 +36,10 @@
 
         <div id="voting-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
             <h2 class="text-xl font-semibold mb-4">Rank Your Candidates</h2>
-            <button id="define-candidates-btn" class="mb-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
+            <div class="flex space-x-2 mb-4">
+                <button id="define-candidates-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Define Candidates</button>
+                <button id="reset-votes" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Reset Votes</button>
+            </div>
             <p class="text-gray-600 mb-4">Click candidates in order of preference.</p>
             <div id="candidate-list" class="space-y-2">
                 <!-- Candidates will be populated here -->
@@ -92,6 +95,18 @@
             currentRanking = [];
             populateCandidates();
             updateRankingDisplay();
+        });
+
+        // Reset votes but keep candidates
+        document.getElementById('reset-votes').addEventListener('click', () => {
+            votes = [];
+            currentRanking = [];
+            document.getElementById('show-results').classList.add('hidden');
+            document.getElementById('results').innerHTML = '<p>No votes submitted yet.</p>';
+            if (candidates.length > 0) {
+                populateCandidates();
+                updateRankingDisplay();
+            }
         });
 
         // Populate candidate list
