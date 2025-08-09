@@ -80,16 +80,10 @@
                 oscillator.frequency.setValueAtTime(800, ctx.currentTime); // Higher pitch
                 gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-            } else if (type === 'reset') {
-                // Click sound for Reset (lower pitch, shorter duration)
-                oscillator.type = 'square';
-                oscillator.frequency.setValueAtTime(400, ctx.currentTime); // Lower pitch
-                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
             }
 
             oscillator.start();
-            oscillator.stop(ctx.currentTime + (type === 'submit' ? 0.5 : 0.2));
+            oscillator.stop(ctx.currentTime + 0.5);
         }
 
         // Define candidates (reload inputs with current candidates)
@@ -175,7 +169,6 @@
 
         // Reset ranking
         document.getElementById('reset-ranking').addEventListener('click', () => {
-            playSound('reset');
             currentRanking = [];
             populateCandidates();
             updateRankingDisplay();
