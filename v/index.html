@@ -281,6 +281,74 @@
         // Show results
         document.getElementById('show-results').addEventListener('click', calculateResults);
 
+        // Simulation function for tie-breaking
+        function computeWinnerAndMajority(remaining, votes) {
+            let rem = [...remaining];
+            let rounds = 0;
+            while (rem.length > 1 && rounds < 10) {
+                rounds++;
+                const voteCounts = {};
+                votes.forEach(vote => {
+                    const first = vote.find(c => rem.includes(c));
+                    if (first) voteCounts[first] = (voteCounts[first] || 0) + 1;
+                });
+                rem.forEach(c => { if (!voteCounts[c]) voteCounts[c] = 0; });
+                const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+                const maxVotes = Math.max(...Object.values(voteCounts));
+                const potentialWinner = Object.keys(voteCounts).find(c => voteCounts[c] === maxVotes);
+                if (maxVotes > totalVotes / 2) {
+                    return { winner: potentialWinner, majority: maxVotes / totalVotes };
+                }
+                const zeroVoteCandidates = Object.keys(voteCounts).filter(c => voteCounts[c] === 0);
+                if (zeroVoteCandidates.length > 0) {
+                    rem = rem.filter(c => !zeroVoteCandidates.includes(c));
+                } else {
+                    const nonZeroVotes = Object.entries(voteCounts).filter(([, count]) => count > 0);
+                    const minVotes = Math.min(...nonZeroVotes.map(([, count]) => count));
+                    let toElimCandidates = nonZeroVotes.filter(([, count]) => count === minVotes).map(([c]) => c);
+                    let toElim;
+                    if (toElimCandidates.length === 1) {
+                        toElim = toElimCandidates[0];
+                    } else {
+                        let bestMaj = -1;
+                        let bestElims = [];
+                        for (let cand of toElimCandidates) {
+                            let simRem = rem.filter(c => c !== cand);
+                            let simResult = computeWinnerAndMajority(simRem, votes);
+                            if (simResult.winner) {
+                                let maj = simResult.majority;
+                                if (maj > bestMaj) {
+                                    bestMaj = maj;
+                                    bestElims = [cand];
+                                } else if (maj === bestMaj) {
+                                    bestElims.push(cand);
+                                }
+                            }
+                        }
+                        if (bestElims.length === 1) {
+                            toElim = bestElims[0];
+                        } else {
+                            const idx = Math.floor(Math.random() * bestElims.length);
+                            toElim = bestElims[idx];
+                        }
+                    }
+                    rem = rem.filter(c => c !== toElim);
+                }
+            }
+            if (rem.length === 1) {
+                const voteCounts = {};
+                votes.forEach(vote => {
+                    const first = vote.find(c => rem.includes(c));
+                    if (first) voteCounts[first] = (voteCounts[first] || 0) + 1;
+                });
+                const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+                const count = voteCounts[rem[0]] || 0;
+                return { winner: rem[0], majority: totalVotes > 0 ? count / totalVotes : 0 };
+            } else {
+                return { winner: null, majority: 0 };
+            }
+        }
+
         // Calculate results using modified Instant Runoff Voting
         function calculateResults() {
             const resultsDiv = document.getElementById('results');
@@ -293,6 +361,118 @@
             resultsDiv.innerHTML = '';
 
             let remainingCandidates = [...candidates];
+
+            // Pre-elimination if 4 candidates
+            if (candidates.length === 4) {
+                const preDiv = document.createElement('div');
+                preDiv.innerHTML = `<h3 class="font-semibold mt-4">Pre-elimination: Last-place counts</h3>`;
+
+                const lastPlaceCounts = {};
+                candidates.forEach(c => lastPlaceCounts[c] = 0);
+                votes.forEach(vote => {
+                    if (vote.length === 4) {
+                        const last = vote[3];
+                        lastPlaceCounts[last]++;
+                    }
+                });
+
+                // Display last-place counts
+                const ul = document.createElement('ul');
+                ul.className = 'list-disc pl-5';
+                candidates.forEach(candidate => {
+                    const li = document.createElement('li');
+                    li.textContent = `${candidate}: ${lastPlaceCounts[candidate]} last-place votes`;
+                    ul.appendChild(li);
+                });
+                preDiv.appendChild(ul);
+
+                // Create a canvas for the chart
+                const chartId = `last-place-chart`;
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+                chartContainer.innerHTML = `<canvas id="${chartId}" height="${candidates.length * 50}"></canvas>`;
+                preDiv.appendChild(chartContainer);
+
+                // Append pre content to results before creating chart
+                resultsDiv.appendChild(preDiv);
+
+                // Generate chart for pre-elimination
+                const ctx = document.getElementById(chartId).getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: candidates,
+                        datasets: [{
+                            label: `Last-place votes`,
+                            data: candidates.map(candidate => lastPlaceCounts[candidate]),
+                            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'],
+                            borderColor: ['#388E3C', '#1976D2', '#FFA000', '#D32F2F'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Last-place Votes',
+                                    font: {
+                                        size: 16
+                                    }
+                                },
+                                ticks: {
+                                    stepSize: 1,
+                                    font: {
+                                        size: 14
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Candidates',
+                                    font: {
+                                        size: 16
+                                    }
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 14
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+
+                // Eliminate candidate with highest last-place
+                const maxLast = Math.max(...Object.values(lastPlaceCounts));
+                let toElimCandidates = Object.keys(lastPlaceCounts).filter(c => lastPlaceCounts[c] === maxLast);
+                let toElim;
+                let elimMsg;
+                if (toElimCandidates.length > 1) {
+                    const idx = Math.floor(Math.random() * toElimCandidates.length);
+                    toElim = toElimCandidates[idx];
+                    elimMsg = `Eliminating ${toElim} (highest last-place: ${maxLast}, chosen randomly from ${toElimCandidates.join(', ')})`;
+                } else {
+                    toElim = toElimCandidates[0];
+                    elimMsg = `Eliminating ${toElim} (highest last-place: ${maxLast})`;
+                }
+                const p = document.createElement('p');
+                p.className = 'mt-2';
+                p.textContent = elimMsg;
+                preDiv.appendChild(p);
+
+                remainingCandidates = remainingCandidates.filter(c => c !== toElim);
+            }
+
             let round = 1;
 
             while (remainingCandidates.length > 1) {
@@ -332,7 +512,7 @@
                 const chartId = `vote-chart-round-${round}`;
                 const chartContainer = document.createElement('div');
                 chartContainer.className = 'chart-container';
-                chartContainer.innerHTML = `<canvas id="${chartId}" height="${remainingCandidates.length * 50}"></canvas>`; // Dynamic height
+                chartContainer.innerHTML = `<canvas id="${chartId}" height="${remainingCandidates.length * 50}"></canvas>`;
                 roundDiv.appendChild(chartContainer);
 
                 // Append round content to results before creating chart
@@ -347,13 +527,13 @@
                         datasets: [{
                             label: `Votes in Round ${round}`,
                             data: remainingCandidates.map(candidate => voteCounts[candidate]),
-                            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'], // Distinct colors
+                            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'],
                             borderColor: ['#388E3C', '#1976D2', '#FFA000', '#D32F2F'],
                             borderWidth: 1
                         }]
                     },
                     options: {
-                        indexAxis: 'y', // Horizontal bars
+                        indexAxis: 'y',
                         scales: {
                             x: {
                                 beginAtZero: true,
@@ -361,13 +541,13 @@
                                     display: true,
                                     text: 'Number of Votes',
                                     font: {
-                                        size: 16 // Larger font for readability
+                                        size: 16
                                     }
                                 },
                                 ticks: {
                                     stepSize: 1,
                                     font: {
-                                        size: 14 // Larger font for readability
+                                        size: 14
                                     }
                                 }
                             },
@@ -376,12 +556,12 @@
                                     display: true,
                                     text: 'Candidates',
                                     font: {
-                                        size: 16 // Larger font for readability
+                                        size: 16
                                     }
                                 },
                                 ticks: {
                                     font: {
-                                        size: 14 // Larger font for readability
+                                        size: 14
                                     }
                                 }
                             }
@@ -407,28 +587,57 @@
                     break;
                 }
 
-                // Eliminate candidates with zero votes
+                // Eliminate candidates
                 const zeroVoteCandidates = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === 0);
+                let elimMsg = '';
                 if (zeroVoteCandidates.length > 0) {
-                    const p = document.createElement('p');
-                    p.className = 'mt-2';
-                    p.textContent = `Eliminating ${zeroVoteCandidates.join(', ')} (zero votes)`;
-                    roundDiv.appendChild(p);
+                    elimMsg = `Eliminating ${zeroVoteCandidates.join(', ')} (zero votes)`;
                     remainingCandidates = remainingCandidates.filter(candidate => !zeroVoteCandidates.includes(candidate));
                 } else {
                     // Eliminate one candidate with the fewest votes (>0)
-                    const nonZeroVotes = Object.entries(voteCounts).filter(([_, count]) => count > 0);
+                    const nonZeroVotes = Object.entries(voteCounts).filter(([, count]) => count > 0);
                     if (nonZeroVotes.length > 0) {
-                        const minVotes = Math.min(...nonZeroVotes.map(([_, count]) => count));
-                        const toEliminateCandidates = nonZeroVotes.filter(([_, count]) => count === minVotes).map(([candidate]) => candidate);
-                        // Randomly select one candidate to eliminate from the tied candidates
-                        const toEliminate = toEliminateCandidates[Math.floor(Math.random() * toEliminateCandidates.length)];
-                        const p = document.createElement('p');
-                        p.className = 'mt-2';
-                        p.textContent = `Eliminating ${toEliminate} (fewest votes: ${minVotes}, chosen randomly from ${toEliminateCandidates.join(', ')})`;
-                        roundDiv.appendChild(p);
-                        remainingCandidates = remainingCandidates.filter(candidate => candidate !== toEliminate);
+                        const minVotes = Math.min(...nonZeroVotes.map(([, count]) => count));
+                        let toElimCandidates = nonZeroVotes.filter(([, count]) => count === minVotes).map(([candidate]) => candidate);
+                        let toElim;
+                        if (toElimCandidates.length === 1) {
+                            toElim = toElimCandidates[0];
+                            elimMsg = `Eliminating ${toElim} (fewest votes: ${minVotes})`;
+                        } else {
+                            // Tie-breaker: simulate each elimination
+                            let bestMaj = -1;
+                            let bestElims = [];
+                            for (let cand of toElimCandidates) {
+                                let simRem = remainingCandidates.filter(c => c !== cand);
+                                let simResult = computeWinnerAndMajority(simRem, votes);
+                                if (simResult.winner) {
+                                    let maj = simResult.majority;
+                                    if (maj > bestMaj) {
+                                        bestMaj = maj;
+                                        bestElims = [cand];
+                                    } else if (maj === bestMaj) {
+                                        bestElims.push(cand);
+                                    }
+                                }
+                            }
+                            if (bestElims.length === 1) {
+                                toElim = bestElims[0];
+                                elimMsg = `Eliminating ${toElim} (fewest votes: ${minVotes}, tie broken by highest resulting majority ${(bestMaj * 100).toFixed(2)}%, from tied ${toElimCandidates.join(', ')})`;
+                            } else {
+                                const idx = Math.floor(Math.random() * bestElims.length);
+                                toElim = bestElims[idx];
+                                elimMsg = `Eliminating ${toElim} (fewest votes: ${minVotes}, tie broken by highest resulting majority ${(bestMaj * 100).toFixed(2)}%, chosen randomly from best ${bestElims.join(', ')} among tied ${toElimCandidates.join(', ')})`;
+                            }
+                        }
+                        remainingCandidates = remainingCandidates.filter(candidate => candidate !== toElim);
                     }
+                }
+
+                if (elimMsg) {
+                    const p = document.createElement('p');
+                    p.className = 'mt-2';
+                    p.textContent = elimMsg;
+                    roundDiv.appendChild(p);
                 }
 
                 if (remainingCandidates.length === 0) {
