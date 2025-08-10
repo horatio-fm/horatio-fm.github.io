@@ -46,9 +46,9 @@
         </div>
 
         <div id="voting-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <div class="flex items-center justify-between">
-                <h2 class="text-xl font-semibold mb-4">Rank Your Candidates</h2>
-                <p class="text-gray-600 mb-4">(<span id="vote-count">0</span> votes submitted)</p>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Rank Your Candidates</h2>
+                <span id="vote-count" class="text-gray-600"></span>
             </div>
             <p class="text-gray-600 mb-4">Click candidates in order of preference.</p>
             <div id="candidate-list" class="space-y-2">
@@ -78,7 +78,8 @@
 
         // Function to update vote count display
         function updateVoteCount() {
-            document.getElementById('vote-count').textContent = votes.length;
+            const voteCountSpan = document.getElementById('vote-count');
+            voteCountSpan.textContent = `Total Votes: ${votes.length}`;
         }
 
         // Function to play a sound using Web Audio API
@@ -91,9 +92,8 @@
             gainNode.connect(ctx.destination);
 
             if (type === 'submit') {
-                // Chime sound for Submit Vote (higher pitch, longer duration)
                 oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(800, ctx.currentTime); // Higher pitch
+                oscillator.frequency.setValueAtTime(800, ctx.currentTime);
                 gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
             }
@@ -128,7 +128,6 @@
                 } catch (e) {
                     if (e.name !== 'AbortError') {
                         console.error('Error saving file:', e);
-                        // Fallback to automatic download if file picker fails
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
@@ -140,7 +139,6 @@
                     }
                 }
             } else {
-                // Fallback for browsers without showSaveFilePicker
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -167,9 +165,7 @@
                         if (Array.isArray(state.candidates) && state.candidates.length >= 2 && state.candidates.length <= 4 && new Set(state.candidates).size === state.candidates.length) {
                             candidates = state.candidates;
                             votes = Array.isArray(state.votes) ? state.votes : [];
-                            // Validate votes
                             votes = votes.filter(vote => Array.isArray(vote) && vote.length === candidates.length && vote.every(c => candidates.includes(c)));
-                            // Update UI
                             document.getElementById('candidate1').value = candidates[0] || '';
                             document.getElementById('candidate2').value = candidates[1] || '';
                             document.getElementById('candidate3').value = candidates[2] || '';
@@ -186,12 +182,12 @@
                     } catch (e) {
                         alert('Error parsing JSON file.');
                     }
-                    event.target.value = ''; // Reset file input
+                    event.target.value = '';
                 };
                 reader.readAsText(file);
             } else {
                 alert('Please select a valid JSON file.');
-                event.target.value = ''; // Reset file input
+                event.target.value = '';
             }
         });
 
@@ -240,7 +236,6 @@
             if (!currentRanking.includes(candidate)) {
                 currentRanking.push(candidate);
                 element.remove();
-                // Check if only one candidate remains
                 const remainingCandidates = candidates.filter(c => !currentRanking.includes(c));
                 if (remainingCandidates.length === 1) {
                     currentRanking.push(remainingCandidates[0]);
@@ -273,6 +268,7 @@
             currentRanking = [];
             populateCandidates();
             updateRankingDisplay();
+            updateVoteCount();
         });
 
         // Submit vote
@@ -288,6 +284,9 @@
                 document.getElementById('results').innerHTML = '<p>Press "Show Results" to view the election outcome.</p>';
             }
         });
+
+        // Show results
+        document.getElementById('show-results').addEventListener('click', calculateResults);
 
         // Simulation function for tie-breaking
         function computeWinnerAndMajority(remaining, votes) {
@@ -365,12 +364,10 @@
                 return;
             }
 
-            // Clear previous results
             resultsDiv.innerHTML = '';
 
             let remainingCandidates = [...candidates];
 
-            // Pre-elimination if 4 candidates
             if (candidates.length === 4) {
                 const preDiv = document.createElement('div');
                 preDiv.innerHTML = `<h3 class="font-semibold mt-4">Pre-elimination: Last-place counts</h3>`;
@@ -384,7 +381,6 @@
                     }
                 });
 
-                // Display last-place counts
                 const ul = document.createElement('ul');
                 ul.className = 'list-disc pl-5';
                 candidates.forEach(candidate => {
@@ -394,17 +390,14 @@
                 });
                 preDiv.appendChild(ul);
 
-                // Create a canvas for the chart
                 const chartId = `last-place-chart`;
                 const chartContainer = document.createElement('div');
                 chartContainer.className = 'chart-container';
                 chartContainer.innerHTML = `<canvas id="${chartId}" height="${candidates.length * 50}"></canvas>`;
                 preDiv.appendChild(chartContainer);
 
-                // Append pre content to results before creating chart
                 resultsDiv.appendChild(preDiv);
 
-                // Generate chart for pre-elimination
                 const ctx = document.getElementById(chartId).getContext('2d');
                 new Chart(ctx, {
                     type: 'bar',
@@ -460,7 +453,6 @@
                     }
                 });
 
-                // Eliminate candidate with highest last-place
                 const maxLast = Math.max(...Object.values(lastPlaceCounts));
                 let toElimCandidates = Object.keys(lastPlaceCounts).filter(c => lastPlaceCounts[c] === maxLast);
                 let toElim;
@@ -484,13 +476,10 @@
             let round = 1;
 
             while (remainingCandidates.length > 1) {
-                // Create container for this round
                 const roundDiv = document.createElement('div');
                 roundDiv.innerHTML = `<h3 class="font-semibold mt-4">Round ${round}</h3>`;
 
                 const voteCounts = {};
-
-                // Count first-choice votes
                 votes.forEach(vote => {
                     const firstChoice = vote.find(candidate => remainingCandidates.includes(candidate));
                     if (firstChoice) {
@@ -498,14 +487,12 @@
                     }
                 });
 
-                // Initialize vote counts for all remaining candidates
                 remainingCandidates.forEach(candidate => {
                     if (!voteCounts[candidate]) {
                         voteCounts[candidate] = 0;
                     }
                 });
 
-                // Display vote counts
                 const ul = document.createElement('ul');
                 ul.className = 'list-disc pl-5';
                 remainingCandidates.forEach(candidate => {
@@ -516,17 +503,14 @@
                 });
                 roundDiv.appendChild(ul);
 
-                // Create a canvas for the chart
                 const chartId = `vote-chart-round-${round}`;
                 const chartContainer = document.createElement('div');
                 chartContainer.className = 'chart-container';
                 chartContainer.innerHTML = `<canvas id="${chartId}" height="${remainingCandidates.length * 50}"></canvas>`;
                 roundDiv.appendChild(chartContainer);
 
-                // Append round content to results before creating chart
                 resultsDiv.appendChild(roundDiv);
 
-                // Generate chart for the current round
                 const ctx = document.getElementById(chartId).getContext('2d');
                 new Chart(ctx, {
                     type: 'bar',
@@ -582,7 +566,6 @@
                     }
                 });
 
-                // Check for majority
                 const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
                 const maxVotes = Math.max(...Object.values(voteCounts));
                 const winner = Object.keys(voteCounts).find(candidate => voteCounts[candidate] === maxVotes);
@@ -595,14 +578,12 @@
                     break;
                 }
 
-                // Eliminate candidates
                 const zeroVoteCandidates = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === 0);
                 let elimMsg = '';
                 if (zeroVoteCandidates.length > 0) {
                     elimMsg = `Eliminating ${zeroVoteCandidates.join(', ')} (zero votes)`;
                     remainingCandidates = remainingCandidates.filter(candidate => !zeroVoteCandidates.includes(candidate));
                 } else {
-                    // Eliminate one candidate with the fewest votes (>0)
                     const nonZeroVotes = Object.entries(voteCounts).filter(([, count]) => count > 0);
                     if (nonZeroVotes.length > 0) {
                         const minVotes = Math.min(...nonZeroVotes.map(([, count]) => count));
@@ -612,7 +593,6 @@
                             toElim = toElimCandidates[0];
                             elimMsg = `Eliminating ${toElim} (fewest votes: ${minVotes})`;
                         } else {
-                            // Tie-breaker: simulate each elimination
                             let bestMaj = -1;
                             let bestElims = [];
                             for (let cand of toElimCandidates) {
@@ -666,6 +646,9 @@
                 resultsDiv.appendChild(winnerP);
             }
         }
+
+        // Initialize vote count display
+        updateVoteCount();
     </script>
 </body>
 </html>
