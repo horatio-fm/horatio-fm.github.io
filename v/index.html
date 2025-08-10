@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranked Choice Voting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .candidate-item {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .candidate-item:hover {
+            background-color: #f3f4f6;
+        }
+        #voting-section {
+            margin-bottom: 200vh; /* Two pages worth of white space */
+        }
+        .chart-container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 10px; /* Added padding for better spacing */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-6 max-w-3xl">
+        <h1 class="text-3xl font-bold mb-6 text-center">Ranked Choice Voting</h1>
+
+        <div id="define-candidates" class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4">Define Candidates</h2>
+            <p class="text-gray-600 mb-4">Enter up to 4 candidates. Each must have a unique name.</p>
+            <div class="space-y-2">
+                <input id="candidate1" type="text" placeholder="Candidate 1" class="w-full p-2 border rounded">
+                <input id="candidate2" type="text" placeholder="Candidate 2" class="w-full p-2 border rounded">
+                <input id="candidate3" type="text" placeholder="Candidate 3" class="w-full p-2 border rounded">
+                <input id="candidate4" type="text" placeholder="Candidate 4" class="w-full p-2 border rounded">
+            </div>
+            <div class="flex space-x-2 mt-4">
+                <button id="start-voting" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Start Voting</button>
+                <button id="save-state" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Save</button>
+                <button id="load-state" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">Load</button>
+            </div>
+            <input id="load-file-input" type="file" accept=".json" class="hidden">
+        </div>
+
+        <div id="voting-section" class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4">Rank Your Candidates</h2>
+            <p class="text-gray-600 mb-4">Click candidates in order of preference.</p>
+            <div id="candidate-list" class="space-y-2">
+                <!-- Candidates will be populated here -->
+            </div>
+            <div id="current-ranking" class="mt-4">
+                <h3 class="font-semibold">Your Current Ranking:</h3>
+                <ol id="ranking-list" class="list-decimal pl-6"></ol>
+            </div>
+            <button id="submit-vote" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400" disabled>Submit Vote</button>
+            <button id="reset-ranking" class="mt-4 ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Reset</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Results</h2>
+            <button id="show-results" class="mb-4 bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 hidden">Show Results</button>
+            <div id="results" class="text-gray-600">
+                <p>No votes submitted yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let candidates = [];
+        let votes = [];
+        let currentRanking = [];
+
+        // Function to play a sound using Web Audio API
+        function playSound(type) {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            if (type === 'submit') {
+                // Chime sound for Submit Vote (higher pitch, longer duration)
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(800, ctx.currentTime); // Higher pitch
+                gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            }
+
+            oscillator.start();
+            oscillator.stop(ctx.currentTime + 0.5);
+        }
+
+        // Save state to JSON file with file dialog
+        document.getElementById('save-state').addEventListener('click', async () => {
+            const state = {
+                candidates: candidates,
+                votes: votes
+            };
+            const json = JSON.stringify(state, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'voting_state.json',
+                        types: [
+                            {
+                                description: 'JSON Files',
+                                accept: { 'application/json': ['.json'] }
+                            }
+                        ]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } catch (e) {
+                    if (e.name !== 'AbortError') {
+                        console.error('Error saving file:', e);
+                        // Fallback to automatic download if file picker fails
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'voting_state.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }
+                }
+            } else {
+                // Fallback for browsers without showSaveFilePicker
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'voting_state.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+        });
+
+        // Load state from JSON file
+        document.getElementById('load-state').addEventListener('click', () => {
+            document.getElementById('load-file-input').click();
+        });
+
+        document.getElementById('load-file-input').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/json') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const state = JSON.parse(e.target.result);
+                        if (Array.isArray(state.candidates) && state.candidates.length >= 2 && state.candidates.length <= 4 && new Set(state.candidates).size === state.candidates.length) {
+                            candidates = state.candidates;
+                            votes = Array.isArray(state.votes) ? state.votes : [];
+                            // Validate votes
+                            votes = votes.filter(vote => Array.isArray(vote) && vote.length === candidates.length && vote.every(c => candidates.includes(c)));
+                            // Update UI
+                            document.getElementById('candidate1').value = candidates[0] || '';
+                            document.getElementById('candidate2').value = candidates[1] || '';
+                            document.getElementById('candidate3').value = candidates[2] || '';
+                            document.getElementById('candidate4').value = candidates[3] || '';
+                            currentRanking = [];
+                            populateCandidates();
+                            updateRankingDisplay();
+                            document.getElementById('show-results').classList.toggle('hidden', votes.length === 0);
+                            document.getElementById('results').innerHTML = '<p>No votes submitted yet.</p>';
+                        } else {
+                            alert('Invalid JSON file: Candidates must be an array of 2-4 unique names.');
+                        }
+                    } catch (e) {
+                        alert('Error parsing JSON file.');
+                    }
+                    event.target.value = ''; // Reset file input
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please select a valid JSON file.');
+                event.target.value = ''; // Reset file input
+            }
+        });
+
+        // Start voting with defined candidates
+        document.getElementById('start-voting').addEventListener('click', () => {
+            const inputs = [
+                document.getElementById('candidate1').value.trim(),
+                document.getElementById('candidate2').value.trim(),
+                document.getElementById('candidate3').value.trim(),
+                document.getElementById('candidate4').value.trim()
+            ];
+            candidates = inputs.filter(name => name !== '').slice(0, 4);
+            if (new Set(candidates).size !== candidates.length) {
+                alert('All candidate names must be unique.');
+                return;
+            }
+            if (candidates.length < 2) {
+                alert('Please enter at least 2 candidates.');
+                return;
+            }
+            document.getElementById('show-results').classList.add('hidden');
+            document.getElementById('results').innerHTML = '<p>No votes submitted yet.</p>';
+            votes = [];
+            currentRanking = [];
+            populateCandidates();
+            updateRankingDisplay();
+        });
+
+        // Populate candidate list
+        function populateCandidates() {
+            const list = document.getElementById('candidate-list');
+            list.innerHTML = '';
+            candidates.forEach(candidate => {
+                const div = document.createElement('div');
+                div.className = 'candidate-item flex items-center p-2 bg-gray-50 border rounded';
+                div.innerHTML = `<span>${candidate}</span>`;
+                div.addEventListener('click', () => handleCandidateClick(candidate, div));
+                list.appendChild(div);
+            });
+            updateSubmitButton();
+        }
+
+        // Handle candidate click
+        function handleCandidateClick(candidate, element) {
+            if (!currentRanking.includes(candidate)) {
+                currentRanking.push(candidate);
+                element.remove();
+                // Check if only one candidate remains
+                const remainingCandidates = candidates.filter(c => !currentRanking.includes(c));
+                if (remainingCandidates.length === 1) {
+                    currentRanking.push(remainingCandidates[0]);
+                    document.getElementById('candidate-list').innerHTML = '';
+                }
+                updateRankingDisplay();
+                updateSubmitButton();
+            }
+        }
+
+        // Update ranking display
+        function updateRankingDisplay() {
+            const rankingList = document.getElementById('ranking-list');
+            rankingList.innerHTML = '';
+            currentRanking.forEach((candidate, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${candidate}`;
+                rankingList.appendChild(li);
+            });
+        }
+
+        // Enable/disable submit button
+        function updateSubmitButton() {
+            const submitButton = document.getElementById('submit-vote');
+            submitButton.disabled = currentRanking.length !== candidates.length;
+        }
+
+        // Reset ranking
+        document.getElementById('reset-ranking').addEventListener('click', () => {
+            currentRanking = [];
+            populateCandidates();
+            updateRankingDisplay();
+        });
+
+        // Submit vote
+        document.getElementById('submit-vote').addEventListener('click', () => {
+            if (currentRanking.length === candidates.length) {
+                playSound('submit');
+                votes.push([...currentRanking]);
+                currentRanking = [];
+                populateCandidates();
+                updateRankingDisplay();
+                document.getElementById('show-results').classList.remove('hidden');
+                document.getElementById('results').innerHTML = '<p>Press "Show Results" to view the election outcome.</p>';
+            }
+        });
+
+        // Show results
+        document.getElementById('show-results').addEventListener('click', calculateResults);
+
+        // Calculate results using modified Instant Runoff Voting
+        function calculateResults() {
+            const resultsDiv = document.getElementById('results');
+            if (votes.length === 0) {
+                resultsDiv.innerHTML = '<p>No votes submitted yet.</p>';
+                return;
+            }
+
+            // Clear previous results
+            resultsDiv.innerHTML = '';
+
+            let remainingCandidates = [...candidates];
+            let round = 1;
+
+            while (remainingCandidates.length > 1) {
+                // Create container for this round
+                const roundDiv = document.createElement('div');
+                roundDiv.innerHTML = `<h3 class="font-semibold mt-4">Round ${round}</h3>`;
+
+                const voteCounts = {};
+
+                // Count first-choice votes
+                votes.forEach(vote => {
+                    const firstChoice = vote.find(candidate => remainingCandidates.includes(candidate));
+                    if (firstChoice) {
+                        voteCounts[firstChoice] = (voteCounts[firstChoice] || 0) + 1;
+                    }
+                });
+
+                // Initialize vote counts for all remaining candidates
+                remainingCandidates.forEach(candidate => {
+                    if (!voteCounts[candidate]) {
+                        voteCounts[candidate] = 0;
+                    }
+                });
+
+                // Display vote counts
+                const ul = document.createElement('ul');
+                ul.className = 'list-disc pl-5';
+                remainingCandidates.forEach(candidate => {
+                    const count = voteCounts[candidate];
+                    const li = document.createElement('li');
+                    li.textContent = `${candidate}: ${count} votes`;
+                    ul.appendChild(li);
+                });
+                roundDiv.appendChild(ul);
+
+                // Create a canvas for the chart
+                const chartId = `vote-chart-round-${round}`;
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+                chartContainer.innerHTML = `<canvas id="${chartId}" height="${remainingCandidates.length * 50}"></canvas>`; // Dynamic height
+                roundDiv.appendChild(chartContainer);
+
+                // Append round content to results before creating chart
+                resultsDiv.appendChild(roundDiv);
+
+                // Generate chart for the current round
+                const ctx = document.getElementById(chartId).getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: remainingCandidates,
+                        datasets: [{
+                            label: `Votes in Round ${round}`,
+                            data: remainingCandidates.map(candidate => voteCounts[candidate]),
+                            backgroundColor: ['#4CAF50', '#2196F3', '#FFC107', '#F44336'], // Distinct colors
+                            borderColor: ['#388E3C', '#1976D2', '#FFA000', '#D32F2F'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // Horizontal bars
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Votes',
+                                    font: {
+                                        size: 16 // Larger font for readability
+                                    }
+                                },
+                                ticks: {
+                                    stepSize: 1,
+                                    font: {
+                                        size: 14 // Larger font for readability
+                                    }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Candidates',
+                                    font: {
+                                        size: 16 // Larger font for readability
+                                    }
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 14 // Larger font for readability
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+
+                // Check for majority
+                const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+                const maxVotes = Math.max(...Object.values(voteCounts));
+                const winner = Object.keys(voteCounts).find(candidate => voteCounts[candidate] === maxVotes);
+
+                if (maxVotes > totalVotes / 2) {
+                    const winnerP = document.createElement('p');
+                    winnerP.className = 'font-bold mt-2';
+                    winnerP.textContent = `${winner} wins with a majority!`;
+                    resultsDiv.appendChild(winnerP);
+                    break;
+                }
+
+                // Eliminate candidates with zero votes
+                const zeroVoteCandidates = Object.keys(voteCounts).filter(candidate => voteCounts[candidate] === 0);
+                if (zeroVoteCandidates.length > 0) {
+                    const p = document.createElement('p');
+                    p.className = 'mt-2';
+                    p.textContent = `Eliminating ${zeroVoteCandidates.join(', ')} (zero votes)`;
+                    roundDiv.appendChild(p);
+                    remainingCandidates = remainingCandidates.filter(candidate => !zeroVoteCandidates.includes(candidate));
+                } else {
+                    // Eliminate one candidate with the fewest votes (>0)
+                    const nonZeroVotes = Object.entries(voteCounts).filter(([_, count]) => count > 0);
+                    if (nonZeroVotes.length > 0) {
+                        const minVotes = Math.min(...nonZeroVotes.map(([_, count]) => count));
+                        const toEliminateCandidates = nonZeroVotes.filter(([_, count]) => count === minVotes).map(([candidate]) => candidate);
+                        // Randomly select one candidate to eliminate from the tied candidates
+                        const toEliminate = toEliminateCandidates[Math.floor(Math.random() * toEliminateCandidates.length)];
+                        const p = document.createElement('p');
+                        p.className = 'mt-2';
+                        p.textContent = `Eliminating ${toEliminate} (fewest votes: ${minVotes}, chosen randomly from ${toEliminateCandidates.join(', ')})`;
+                        roundDiv.appendChild(p);
+                        remainingCandidates = remainingCandidates.filter(candidate => candidate !== toEliminate);
+                    }
+                }
+
+                if (remainingCandidates.length === 0) {
+                    const noWinnerP = document.createElement('p');
+                    noWinnerP.className = 'font-bold mt-2';
+                    noWinnerP.textContent = 'No winner (all candidates eliminated).';
+                    resultsDiv.appendChild(noWinnerP);
+                    break;
+                }
+
+                round++;
+            }
+
+            if (remainingCandidates.length === 1) {
+                const winnerP = document.createElement('p');
+                winnerP.className = 'font-bold mt-2';
+                winnerP.textContent = `${remainingCandidates[0]} wins!`;
+                resultsDiv.appendChild(winnerP);
+            }
+        }
+    </script>
+</body>
+</html>
